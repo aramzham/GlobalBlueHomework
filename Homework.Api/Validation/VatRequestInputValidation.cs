@@ -14,7 +14,6 @@ public class VatRequestInputValidation : AbstractValidator<VatRequestInput>
         _rates = rates;
         
         RuleFor(x => x)
-            .Cascade(CascadeMode.Stop)
             .Must(NotHaveMoreThanOneInput)
             .WithMessage("Please only one input (either gross, net or vat amount).");
 

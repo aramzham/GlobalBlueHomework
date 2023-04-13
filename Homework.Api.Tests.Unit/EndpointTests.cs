@@ -53,7 +53,7 @@ public class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
         result.Net.Should().Be(Math.Round(input.Gross.Value / (decimal)(1 + input.VatRate / 100),
             configuration.Value.ResponseDecimalPlaces));
     }
-    
+
     [Fact]
     public async Task Calculate_WhenInputWithNetReceived_ReturnsOutput()
     {
@@ -84,7 +84,7 @@ public class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
             .Be(Math.Round(input.Net.Value * (decimal)input.VatRate / 100, configuration.Value.ResponseDecimalPlaces));
         result.Gross.Should().Be(Math.Round(result.Vat + input.Net.Value, configuration.Value.ResponseDecimalPlaces));
     }
-    
+
     [Fact]
     public async Task Calculate_WhenInputWithVatReceived_ReturnsOutput()
     {
@@ -114,5 +114,75 @@ public class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
         result.Net.Should()
             .Be(Math.Round(input.Vat.Value / (decimal)input.VatRate * 100, configuration.Value.ResponseDecimalPlaces));
         result.Gross.Should().Be(Math.Round(result.Net + input.Vat.Value, configuration.Value.ResponseDecimalPlaces));
+    }
+
+    [Fact]
+    public async Task Calculate_WhenMoreThanOneInput_ReturnsError()
+    {
+        // arrange
+        var input = new Faker<VatRequestInput>()
+            .CustomInstantiator(f => new VatRequestInput(null, f.Random.Decimal(), f.Random.Decimal(), f.Random.Int()))
+            .Generate();
+        var content = JsonSerializer.Serialize(input);
+
+        // act
+        var response = await _httpClient.PostAsync("/vat-calculator",
+            new StringContent(content, Encoding.UTF8, "application/json"));
+        var responseText = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ValidationFailureResponse>(responseText, new JsonSerializerOptions()
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        // assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        result.Errors.Should().HaveCountGreaterOrEqualTo(1);
+        result.Errors.First().Messages.Should().NotBeEmpty();
+        result.Errors.First().Messages.Any(x => x == "Please only one input (either gross, net or vat amount).")
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Calculate_WhenInvalidVatRate_ReturnsError()
+    {
+        // arrange
+        var configuration = _app.Services.GetRequiredService<IOptions<AppConfig>>();
+        var input = new Faker<VatRequestInput>()
+            .CustomInstantiator(f => new VatRequestInput(null, f.Random.Decimal(), f.Random.Decimal(),
+                GetInvalidVatRate(f.Random, configuration.Value.AustrianVatRates)))
+            .Generate();
+        var content = JsonSerializer.Serialize(input);
+
+        // act
+        var response = await _httpClient.PostAsync("/vat-calculator",
+            new StringContent(content, Encoding.UTF8, "application/json"));
+        var responseText = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ValidationFailureResponse>(responseText, new JsonSerializerOptions()
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        // assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        result.Errors.Should().HaveCountGreaterOrEqualTo(1);
+        var vatRateError = result.Errors.FirstOrDefault(x => x.PropertyName == nameof(input.VatRate));
+        vatRateError.Should().NotBeNull();
+        vatRateError.Messages.Should().NotBeEmpty();
+        vatRateError.Messages.Any(x => x == $"Vat Rate {input.VatRate} is not applicable for Austria")
+            .Should().BeTrue();
+    }
+
+    private float GetInvalidVatRate(Randomizer r, float[] excludedValues)
+    {
+        float randomFloat;
+
+        do
+        {
+            randomFloat = r.Float(1, 101);
+        } while (excludedValues.Contains(randomFloat));
+        
+        return randomFloat;
     }
 }
