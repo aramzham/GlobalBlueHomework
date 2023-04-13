@@ -3,5 +3,5 @@
 public class AppConfig
 {
     public float[] AustrianVatRates { get; set; }
-    public int ResponseFloatingPointRound { get; set; }
+    public int ResponseDecimalPlaces { get; set; }
 }

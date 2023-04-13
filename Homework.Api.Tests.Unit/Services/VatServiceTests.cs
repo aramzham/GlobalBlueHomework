@@ -14,6 +14,8 @@ namespace Homework.Api.Tests.Unit.Services;
 
 public class VatServiceTests
 {
+    private const decimal Precision = 0.09m;
+    
     private readonly IVatService _sut;
     private readonly IValidator<VatRequestInput> _requestValidatorSubstitute;
     private readonly IOptions<AppConfig> _configSubstitute;
@@ -28,7 +30,7 @@ public class VatServiceTests
         _decimalPlaces = 2; // taken the same as in VatServiceTestsData test data
         _configSubstitute = Substitute.For<IOptions<AppConfig>>();
         var appConfig = new Faker<AppConfig>()
-            .RuleFor(x => x.ResponseFloatingPointRound, _decimalPlaces)
+            .RuleFor(x => x.ResponseDecimalPlaces, _decimalPlaces)
             .Generate();
         _configSubstitute.Value.Returns(appConfig);
         
@@ -69,7 +71,8 @@ public class VatServiceTests
         // assert
         result.IsT0.Should().BeTrue();
         result.IsT1.Should().BeFalse();
-        result.AsT0.Gross.Should().Be(result.AsT0.Net + result.AsT0.Vat);
+        result.AsT0.Gross.Should().Be(input.Gross.Value);
+        result.AsT0.Gross.Should().BeApproximately(result.AsT0.Net + result.AsT0.Vat, Precision);
         GetDecimalPlaces(result.AsT0.Net).Should().Be(_decimalPlaces);
     }
     
@@ -89,7 +92,8 @@ public class VatServiceTests
         // assert
         result.IsT0.Should().BeTrue();
         result.IsT1.Should().BeFalse();
-        result.AsT0.Gross.Should().Be(result.AsT0.Net + result.AsT0.Vat);
+        result.AsT0.Net.Should().Be(input.Net.Value);
+        result.AsT0.Gross.Should().BeApproximately(result.AsT0.Net + result.AsT0.Vat, Precision);
         GetDecimalPlaces(result.AsT0.Gross).Should().Be(_decimalPlaces);
     }
     
@@ -110,7 +114,7 @@ public class VatServiceTests
         result.IsT0.Should().BeTrue();
         result.IsT1.Should().BeFalse();
         result.AsT0.Vat.Should().Be(input.Vat.Value);
-        result.AsT0.Gross.Should().Be(result.AsT0.Net + result.AsT0.Vat);
+        result.AsT0.Gross.Should().BeApproximately(result.AsT0.Net + result.AsT0.Vat, Precision);
         GetDecimalPlaces(result.AsT0.Net).Should().Be(_decimalPlaces);
     }
     
