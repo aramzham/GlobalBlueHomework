@@ -174,6 +174,32 @@ public class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
             .Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Calculate_WhenSumsNotProvidedAndInvalidVatRate_ReturnsCorrectData()
+    {
+        // arrange
+        var configuration = _app.Services.GetRequiredService<IOptions<AppConfig>>();
+        var input = new Faker<VatRequestInput>()
+            .CustomInstantiator(f => new VatRequestInput(null, null, null,
+                GetInvalidVatRate(f.Random, configuration.Value.AustrianVatRates)))
+            .Generate();
+        var content = JsonSerializer.Serialize(input);
+
+        // act
+        var response = await _httpClient.PostAsync("/vat-calculator",
+            new StringContent(content, Encoding.UTF8, "application/json"));
+        var responseText = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ValidationFailureResponse>(responseText, new JsonSerializerOptions()
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        // assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        result.Errors.Should().HaveCountGreaterOrEqualTo(2);
+    }
+
     private float GetInvalidVatRate(Randomizer r, float[] excludedValues)
     {
         float randomFloat;
