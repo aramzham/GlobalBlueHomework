@@ -175,7 +175,7 @@ public class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task Calculate_WhenSumsNotProvidedAndInvalidVatRate_ReturnsCorrectData()
+    public async Task Calculate_WhenSumsNotProvidedAndInvalidVatRate_ReturnsValidationFailure()
     {
         // arrange
         var configuration = _app.Services.GetRequiredService<IOptions<AppConfig>>();
@@ -198,6 +198,34 @@ public class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         result.Errors.Should().HaveCountGreaterOrEqualTo(2);
+    }
+    
+    [Fact]
+    public async Task Calculate_WhenTextEnteredInsteadOfNumber_ReturnsError()
+    {
+        // arrange
+        var input = new
+        {
+            gross = "invalid",
+            vatRate = 20
+        };
+        var content = JsonSerializer.Serialize(input);
+
+        // act
+        var response = await _httpClient.PostAsync("/vat-calculator",
+            new StringContent(content, Encoding.UTF8, "application/json"));
+        var responseText = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ErrorResponse>(responseText, new JsonSerializerOptions()
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        // assert
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+
+        result.Status.Should().Be(500);
+        result.TraceId.Should().NotBeEmpty();
+        result.Message.Should().NotBeEmpty();
     }
 
     private float GetInvalidVatRate(Randomizer r, float[] excludedValues)
